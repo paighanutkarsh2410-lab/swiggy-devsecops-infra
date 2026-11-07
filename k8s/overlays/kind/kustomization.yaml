@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+images:
+  - name: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-backend
+    newTag: c52d4325b799d35bfe5d1d86991abf9ed87b647d
+  - name: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-frontend
+    newTag: c52d4325b799d35bfe5d1d86991abf9ed87b647d
+
+secretGenerator:
+  # secrets.env is created by scripts/kind-up.sh and is never committed.
+  - name: swiggy-secrets
+    namespace: swiggy
+    envs:
+      - secrets.env
+
+patches:
+  # Expose the website on the kind node so the host can reach it.
+  - target:
+      kind: Service
+      name: frontend
+    patch: |-
+      - op: add
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30080

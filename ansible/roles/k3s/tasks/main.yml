@@ -1,0 +1,58 @@
+- name: Download the K3s binary and verify its checksum
+  ansible.builtin.get_url:
+    url: "{{ k3s_release_url }}/k3s"
+    checksum: "sha256:{{ k3s_release_url }}/sha256sum-amd64.txt"
+    dest: /usr/local/bin/k3s
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart k3s
+
+- name: Create the K3s configuration directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Configure K3s
+  ansible.builtin.copy:
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Managed by Ansible.
+      write-kubeconfig-mode: "0600"
+      secrets-encryption: true
+      tls-san:
+        - "{{ ansible_host }}"
+  notify: Restart k3s
+
+- name: Install the K3s systemd service
+  ansible.builtin.copy:
+    src: k3s.service
+    dest: /etc/systemd/system/k3s.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart k3s
+
+- name: Start K3s and enable it at boot
+  ansible.builtin.systemd_service:
+    name: k3s
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Apply any pending K3s restart now
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the node to become ready
+  ansible.builtin.command: /usr/local/bin/k3s kubectl get nodes --no-headers
+  register: k3s_nodes
+  until: "' Ready ' in k3s_nodes.stdout"
+  retries: 30
+  delay: 10
+  changed_when: false

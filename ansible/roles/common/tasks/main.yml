@@ -1,0 +1,75 @@
+- name: Install base packages
+  ansible.builtin.dnf:
+    name:
+      - git
+      - jq
+      - tar
+      - dnf-automatic
+    state: present
+
+- name: Apply pending security updates
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    security: true
+    update_only: true
+
+- name: Install security updates automatically every day
+  ansible.builtin.lineinfile:
+    path: /etc/dnf/automatic.conf
+    regexp: "^{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.value }}"
+  loop:
+    - { key: upgrade_type, value: security }
+    - { key: apply_updates, value: "yes" }
+
+- name: Enable the automatic update timer
+  ansible.builtin.systemd_service:
+    name: dnf-automatic.timer
+    enabled: true
+    state: started
+
+- name: Harden the SSH server
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/50-hardening.conf
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Managed by Ansible.
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      MaxAuthTries 3
+      X11Forwarding no
+  notify: Restart sshd
+
+- name: Load the bridge netfilter module at boot
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/kubernetes.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: "br_netfilter\n"
+
+- name: Check which kernel modules are loaded
+  ansible.builtin.command: lsmod
+  register: common_lsmod
+  changed_when: false
+
+- name: Load the bridge netfilter module now
+  ansible.builtin.command: modprobe br_netfilter
+  when: "'br_netfilter' not in common_lsmod.stdout"
+  changed_when: true
+
+- name: Configure kernel settings for Kubernetes networking
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/90-kubernetes.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible.
+      net.ipv4.ip_forward = 1
+      net.bridge.bridge-nf-call-iptables = 1
+  notify: Reload sysctl

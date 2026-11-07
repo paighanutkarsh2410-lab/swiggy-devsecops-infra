@@ -1,0 +1,6 @@
+- name: Configure the K3s server
+  hosts: k3s_servers
+  become: true
+  roles:
+    - common
+    - k3s

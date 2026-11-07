@@ -1,0 +1,103 @@
+name: Validate Infrastructure
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  KUBECONFORM_VERSION: v0.6.7
+  TERRAFORM_VERSION: 1.17.1
+
+jobs:
+  kubernetes:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create placeholder secrets
+        run: cp k8s/overlays/kind/secrets.env.example k8s/overlays/kind/secrets.env
+
+      - name: Render manifests
+        run: kubectl kustomize k8s/overlays/kind > rendered.yaml
+
+      - name: Install kubeconform
+        run: |
+          curl -fsSLO "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
+
+      - name: Validate against Kubernetes schemas
+        run: ./kubeconform -strict -summary rendered.yaml
+
+  terraform:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform/aws
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive -diff
+
+      - name: Initialise without a backend
+        run: terraform init -backend=false -input=false
+
+      - name: Validate configuration
+        run: terraform validate
+
+  ansible:
+    name: Lint Ansible
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ansible
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Ansible and ansible-lint
+        run: pipx install --include-deps ansible-lint
+
+      - name: Check playbook syntax
+        env:
+          SWIGGY_SERVER_IP: 192.0.2.10
+        run: ansible-playbook playbooks/site.yml --syntax-check
+
+      - name: Lint playbooks and roles
+        run: ansible-lint playbooks/site.yml
+
+  security:
+    name: Scan Configuration with Trivy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Scan Kubernetes and Terraform configuration
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: '1'
