@@ -77,6 +77,34 @@ This creates real AWS resources that can cost money. Set up an AWS budget alert 
 
 You need Terraform, Ansible and AWS credentials for an IAM user, not the root account.
 
+### Create a limited IAM user
+
+[`terraform/aws/iam-policy.json`](terraform/aws/iam-policy.json) gives Terraform only what this project needs:
+
+- EC2 and VPC actions in `ap-south-1` (Mumbai) only.
+- Read access to the one public SSM parameter that holds the Amazon Linux AMI ID.
+- No IAM, billing or account permissions.
+- New servers must be `t3.micro` or `t3.small`, and cannot be resized to anything larger.
+- Unencrypted disks are refused.
+
+In the IAM console:
+
+1. **Policies → Create policy → JSON**, paste the file's contents and name it `swiggy-terraform`.
+2. **Users → Create user** named `swiggy-terraform`, with no console access. Attach the `swiggy-terraform` policy.
+3. Open the user, then **Security credentials → Create access key → Command Line Interface**.
+
+On the machine that runs Terraform, store the key yourself. Never paste it into a chat, a file in this repo or a ticket.
+
+```bash
+aws configure --profile swiggy
+export AWS_PROFILE=swiggy
+aws sts get-caller-identity
+```
+
+Delete the access key in the IAM console when you no longer need it.
+
+### Create the server
+
 ```bash
 cd terraform/aws
 cp terraform.tfvars.example terraform.tfvars
