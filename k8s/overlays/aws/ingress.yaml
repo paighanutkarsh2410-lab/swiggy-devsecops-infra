@@ -1,6 +1,10 @@
 # K3s ships Traefik, which listens on ports 80 and 443 of the server.
-# This sends all website traffic to the frontend; Nginx in the frontend
-# forwards /api to the backend.
+# Traefik routes by host name:
+#   partner.<server-ip-with-dashes>.sslip.io -> partner console
+#   anything else (the bare IP, or <server-ip-with-dashes>.sslip.io) -> customer app
+# sslip.io is a free DNS service that resolves those names to the IP inside
+# them, so host-based routing works without buying a domain.
+# scripts/aws-deploy.sh replaces partner.swiggy.invalid with the real name.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,6 +13,16 @@ metadata:
 spec:
   ingressClassName: traefik
   rules:
+    - host: partner.swiggy.invalid
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: partner
+                port:
+                  name: http
     - http:
         paths:
           - path: /

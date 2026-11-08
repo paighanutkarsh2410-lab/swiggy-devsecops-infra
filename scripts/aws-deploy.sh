@@ -24,11 +24,19 @@ if [ ! -f "$SECRETS" ]; then
   echo "Generated $SECRETS"
 fi
 
-kubectl kustomize "$OVERLAY" | remote sudo k3s kubectl apply -f -
+# Host names come from the server IP, for example partner.13-55-152-184.sslip.io.
+IP_DASHED="${SERVER_IP//./-}"
+PARTNER_HOST="partner.$IP_DASHED.sslip.io"
+
+kubectl kustomize "$OVERLAY" \
+  | sed "s/partner\.swiggy\.invalid/$PARTNER_HOST/" \
+  | remote sudo k3s kubectl apply -f -
 
 remote sudo k3s kubectl -n swiggy rollout status statefulset/postgres --timeout=300s
 remote sudo k3s kubectl -n swiggy rollout status deployment/backend --timeout=300s
 remote sudo k3s kubectl -n swiggy rollout status deployment/frontend --timeout=300s
+remote sudo k3s kubectl -n swiggy rollout status deployment/partner --timeout=300s
 
 remote sudo k3s kubectl -n swiggy get pods,ingress
-echo "Website: http://$SERVER_IP"
+echo "Customer app:    http://$SERVER_IP  (or http://$IP_DASHED.sslip.io)"
+echo "Partner console: http://$PARTNER_HOST"

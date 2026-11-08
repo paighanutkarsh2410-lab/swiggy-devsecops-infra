@@ -34,5 +34,5 @@ done
 SWIGGY_SERVER_IP="$IP" SSH_KEY="$SSH_KEY" "$ROOT/scripts/aws-deploy.sh"
 
 echo
-echo "The app is live: http://$IP"
+echo "The app is live. The two website addresses are printed just above."
 echo "It uses AWS credits while it runs. Stop it with: ./scripts/aws-down.sh"

@@ -7,9 +7,11 @@ resources:
 
 images:
   - name: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-backend
-    newTag: 5081b9c851b7614d94230c9a9a92d51847675ec4
+    newTag: 05003cb2a8532dbae0848372507375d7716367a6
   - name: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-frontend
-    newTag: 5081b9c851b7614d94230c9a9a92d51847675ec4
+    newTag: 05003cb2a8532dbae0848372507375d7716367a6
+  - name: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-partner
+    newTag: 05003cb2a8532dbae0848372507375d7716367a6
 
 secretGenerator:
   # secrets.env is created by scripts/aws-deploy.sh and is never committed.
