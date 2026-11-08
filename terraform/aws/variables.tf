@@ -1,7 +1,7 @@
 variable "region" {
   description = "AWS region to deploy into. Must match the region in iam-policy.json."
   type        = string
-  default     = "ap-southeast-1"
+  default     = "ap-southeast-2"
 }
 
 variable "instance_type" {

@@ -81,7 +81,7 @@ You need Terraform, Ansible and AWS credentials for an IAM user, not the root ac
 
 [`terraform/aws/iam-policy.json`](terraform/aws/iam-policy.json) gives Terraform only what this project needs:
 
-- EC2 and VPC actions in `ap-southeast-1` (Singapore) only. Mumbai (`ap-south-1`) would be closer to India, but this project's AWS Free plan account is blocked from it by a service control policy that the account cannot change.
+- EC2 and VPC actions in `ap-southeast-2` (Sydney) only. The AWS Free plan organization this account belongs to blocks other regions with a service control policy that the account cannot change. Dry runs confirmed Mumbai and Singapore are denied and Sydney is allowed.
 - Read access to the one public SSM parameter that holds the Amazon Linux AMI ID.
 - No IAM, billing or account permissions.
 - New servers must be `t3.micro` or `t3.small`, and cannot be resized to anything larger.
