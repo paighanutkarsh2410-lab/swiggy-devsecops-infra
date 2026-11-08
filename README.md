@@ -13,7 +13,9 @@ Keeping deployment config apart from application code means the Git history of t
 | `kind/cluster.yaml` | Local kind cluster definition |
 | `k8s/overlays/aws` | K3s on EC2 settings: image tags, Traefik ingress, secrets |
 | `scripts/kind-up.sh` | Creates the cluster and deploys the app |
+| `scripts/aws-up.sh`, `aws-down.sh`, `aws-status.sh` | Create, destroy and check the whole AWS environment |
 | `scripts/aws-deploy.sh` | Deploys the app to the K3s server on EC2 |
+| `docs/aws-deployment.md` | Record of a deployment to AWS, with screenshots |
 | `terraform/aws` | AWS network and EC2 server for K3s |
 | `ansible` | Server hardening and K3s installation |
 
@@ -75,9 +77,25 @@ kind delete cluster --name swiggy
 
 ## Deploy to AWS
 
-This creates real AWS resources that can cost money. Set up an AWS budget alert first, and run `terraform destroy` when you finish each session.
+This creates real AWS resources that can cost money. Set up an AWS budget alert first, and take the environment down when you finish each session.
 
-You need Terraform, Ansible and AWS credentials for an IAM user, not the root account.
+[docs/aws-deployment.md](docs/aws-deployment.md) records a full deployment, with screenshots and command output.
+
+### Quick start
+
+Once the IAM user below is set up, three commands run everything from the repository root:
+
+| Command | What it does |
+|---|---|
+| `./scripts/aws-up.sh` | Shows the Terraform plan and asks for `yes`, then creates the server, runs Ansible and deploys the app. Prints the website address. About 10 minutes. |
+| `./scripts/aws-status.sh` | Says whether anything is running in AWS and whether the website answers. |
+| `./scripts/aws-down.sh` | Shows what Terraform will destroy and asks for `yes`, destroys it, then checks that nothing tagged for this project is left. |
+
+Add `-y` to `aws-up.sh` or `aws-down.sh` to skip the question. Each run of `aws-up.sh` sets the SSH and Kubernetes API rule to your current public IP, so run it again if your IP changes.
+
+You need the AWS CLI, Terraform, Ansible and kubectl, plus AWS credentials for an IAM user, not the root account. The scripts use the `swiggy` AWS profile and the SSH key `~/.ssh/swiggy-aws`, which `aws-up.sh` creates if it is missing. Set `AWS_PROFILE` or `SSH_KEY` to use others.
+
+The sections below explain each step the scripts run.
 
 ### Create a limited IAM user
 
@@ -135,7 +153,7 @@ cd ..
 ./scripts/aws-deploy.sh
 ```
 
-K3s's built-in Traefik serves the website on port 80 of the server. The script generates `k8s/overlays/aws/secrets.env` on first run. Keep it while the server exists: a new file would change the database password and lock the backend out of the existing database.
+K3s's built-in Traefik serves the website on port 80 of the server. The script generates `k8s/overlays/aws/secrets.env` on first run. Keep it while the server exists: a new file would change the database password and lock the backend out of the existing database. `aws-down.sh` deletes it, because the database goes with the server.
 
 Remove everything when you are done:
 
