@@ -2,12 +2,12 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ReadEc2InSingapore",
+      "Sid": "ReadEc2InSydney",
       "Effect": "Allow",
       "Action": "ec2:Describe*",
       "Resource": "*",
       "Condition": {
-        "StringEquals": { "aws:RequestedRegion": "ap-southeast-1" }
+        "StringEquals": { "aws:RequestedRegion": "ap-southeast-2" }
       }
     },
     {
@@ -53,14 +53,14 @@
       ],
       "Resource": "*",
       "Condition": {
-        "StringEquals": { "aws:RequestedRegion": "ap-southeast-1" }
+        "StringEquals": { "aws:RequestedRegion": "ap-southeast-2" }
       }
     },
     {
       "Sid": "ReadAmazonLinuxAmiId",
       "Effect": "Allow",
       "Action": "ssm:GetParameter",
-      "Resource": "arn:aws:ssm:ap-southeast-1::parameter/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+      "Resource": "arn:aws:ssm:ap-southeast-2::parameter/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
     },
     {
       "Sid": "LaunchOnlySmallInstances",
