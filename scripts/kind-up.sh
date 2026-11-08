@@ -26,6 +26,8 @@ kubectl apply -k "$OVERLAY"
 kubectl -n swiggy rollout status statefulset/postgres --timeout=180s
 kubectl -n swiggy rollout status deployment/backend --timeout=180s
 kubectl -n swiggy rollout status deployment/frontend --timeout=180s
+kubectl -n swiggy rollout status deployment/partner --timeout=180s
 
 kubectl -n swiggy get pods -o wide
-echo "Website: http://localhost:8081"
+echo "Customer app:    http://localhost:8081"
+echo "Partner console: http://localhost:8083"

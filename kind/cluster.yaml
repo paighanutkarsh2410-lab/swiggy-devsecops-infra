@@ -4,8 +4,13 @@ name: swiggy
 nodes:
   - role: control-plane
     extraPortMappings:
-      # Website: NodePort 30080 inside the cluster, port 8081 on the host.
+      # Customer app: NodePort 30080 inside the cluster, port 8081 on the host.
       - containerPort: 30080
         hostPort: 8081
+        listenAddress: "0.0.0.0"
+        protocol: TCP
+      # Partner console: NodePort 30082 inside the cluster, port 8083 on the host.
+      - containerPort: 30082
+        hostPort: 8083
         listenAddress: "0.0.0.0"
         protocol: TCP

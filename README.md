@@ -9,9 +9,9 @@ Keeping deployment config apart from application code means the Git history of t
 | Path | Purpose |
 |---|---|
 | `k8s/base` | Kubernetes manifests shared by every environment |
-| `k8s/overlays/kind` | Local cluster settings: image tags, NodePort, secrets |
+| `k8s/overlays/kind` | Local cluster settings: image tags, NodePorts for both websites, secrets |
 | `kind/cluster.yaml` | Local kind cluster definition |
-| `k8s/overlays/aws` | K3s on EC2 settings: image tags, Traefik ingress, secrets |
+| `k8s/overlays/aws` | K3s on EC2 settings: image tags, Traefik host routing, secrets |
 | `scripts/kind-up.sh` | Creates the cluster and deploys the app |
 | `scripts/aws-up.sh`, `aws-down.sh`, `aws-status.sh` | Create, destroy and check the whole AWS environment |
 | `scripts/aws-deploy.sh` | Deploys the app to the K3s server on EC2 |
@@ -29,18 +29,29 @@ Each tool has one job:
 
 ## Architecture
 
+Two separate websites share one API: the customer app and the restaurant partner console.
+
 ```mermaid
 flowchart LR
-    User[Browser] -->|NodePort 30080| FE[frontend x2<br/>Nginx + React]
+    Customer[Customer browser] --> FE[frontend x2<br/>customer app]
+    Partner[Restaurant browser] --> PC[partner x2<br/>partner console]
     FE -->|/api| BE[backend x2<br/>Node.js]
+    PC -->|/api/partner| BE
     BE --> DB[(postgres<br/>StatefulSet + PVC)]
 ```
+
+| Environment | Customer app | Partner console |
+|---|---|---|
+| kind | NodePort 30080, http://localhost:8081 | NodePort 30082, http://localhost:8083 |
+| AWS (K3s + Traefik) | `http://<server-ip>` | `http://partner.<server-ip-with-dashes>.sslip.io` |
+
+On AWS, Traefik routes by host name. [sslip.io](https://sslip.io) resolves names like `partner.13-55-152-184.sslip.io` to the IP inside them, so host-based routing works without buying a domain.
 
 ## Security
 
 - The `swiggy` namespace enforces the `restricted` Pod Security Standard.
 - Every container runs as non-root with a read-only root filesystem, no privilege escalation, all Linux capabilities dropped and the `RuntimeDefault` seccomp profile.
-- Network policies deny all incoming traffic by default. Only the frontend accepts outside traffic, only the frontend can reach the backend, and only the backend can reach PostgreSQL.
+- Network policies deny all incoming traffic by default. Only the two websites accept outside traffic, only they can reach the backend, and only the backend can reach PostgreSQL.
 - Service account tokens are not mounted, because no pod talks to the Kubernetes API.
 - Secrets are generated locally into `secrets.env`, which is never committed.
 - The EC2 server requires IMDSv2, encrypts its disk, and only accepts SSH and Kubernetes API traffic from one admin address.
@@ -56,9 +67,11 @@ You need Docker, [kind](https://kind.sigs.k8s.io) and kubectl.
 ./scripts/kind-up.sh
 ```
 
-The script creates a `swiggy` cluster, generates random secrets on first run, deploys everything and waits for it to be ready. The website is then at http://localhost:8081.
+The script creates a `swiggy` cluster, generates random secrets on first run, deploys everything and waits for it to be ready. The customer app is then at http://localhost:8081 and the partner console at http://localhost:8083.
 
-To create a restaurant staff account:
+A cluster created before the partner console existed has no port mapping for it. Recreate it with `kind delete cluster --name swiggy` and run the script again.
+
+To create a restaurant partner account (add `STAFF_ROLE=OWNER` for an owner):
 
 ```bash
 kubectl -n swiggy exec deploy/backend -- env \
@@ -171,3 +184,11 @@ Images are built and scanned by the app repo's CI and published to GHCR, tagged 
 ## Database schema
 
 `k8s/base/db/init.sql` is a copy of `backend/db/init.sql` from the app repo. It only runs when the database volume is first created.
+
+An existing database does not rerun `init.sql`. To upgrade one in place, run the app repo's migrations in order. Each is safe to run more than once:
+
+```bash
+kubectl -n swiggy exec -i postgres-0 -- sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < backend/db/migrations/002_partner_console.sql
+```
+
+On AWS this is never needed, because each `aws-up.sh` starts with a new database.

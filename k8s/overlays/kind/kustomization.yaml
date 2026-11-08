@@ -6,9 +6,11 @@ resources:
 
 images:
   - name: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-backend
-    newTag: c52d4325b799d35bfe5d1d86991abf9ed87b647d
+    newTag: 05003cb2a8532dbae0848372507375d7716367a6
   - name: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-frontend
-    newTag: c52d4325b799d35bfe5d1d86991abf9ed87b647d
+    newTag: 05003cb2a8532dbae0848372507375d7716367a6
+  - name: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-partner
+    newTag: 05003cb2a8532dbae0848372507375d7716367a6
 
 secretGenerator:
   # secrets.env is created by scripts/kind-up.sh and is never committed.
@@ -18,7 +20,7 @@ secretGenerator:
       - secrets.env
 
 patches:
-  # Expose the website on the kind node so the host can reach it.
+  # Expose both websites on the kind node so the host can reach them.
   - target:
       kind: Service
       name: frontend
@@ -29,3 +31,13 @@ patches:
       - op: add
         path: /spec/ports/0/nodePort
         value: 30080
+  - target:
+      kind: Service
+      name: partner
+    patch: |-
+      - op: add
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30082

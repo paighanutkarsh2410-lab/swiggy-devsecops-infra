@@ -8,6 +8,7 @@ resources:
   - postgres.yaml
   - backend.yaml
   - frontend.yaml
+  - partner.yaml
   - network-policies.yaml
 
 configMapGenerator:
