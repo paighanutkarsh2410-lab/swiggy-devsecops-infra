@@ -25,10 +25,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create placeholder secrets
-        run: cp k8s/overlays/kind/secrets.env.example k8s/overlays/kind/secrets.env
+        run: |
+          for overlay in kind aws; do
+            cp "k8s/overlays/$overlay/secrets.env.example" "k8s/overlays/$overlay/secrets.env"
+          done
 
       - name: Render manifests
-        run: kubectl kustomize k8s/overlays/kind > rendered.yaml
+        run: |
+          kubectl kustomize k8s/overlays/kind > rendered-kind.yaml
+          kubectl kustomize k8s/overlays/aws > rendered-aws.yaml
 
       - name: Install kubeconform
         run: |
@@ -36,7 +41,7 @@ jobs:
           tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
 
       - name: Validate against Kubernetes schemas
-        run: ./kubeconform -strict -summary rendered.yaml
+        run: ./kubeconform -strict -summary rendered-kind.yaml rendered-aws.yaml
 
   terraform:
     name: Validate Terraform

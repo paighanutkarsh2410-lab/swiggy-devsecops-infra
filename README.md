@@ -11,7 +11,9 @@ Keeping deployment config apart from application code means the Git history of t
 | `k8s/base` | Kubernetes manifests shared by every environment |
 | `k8s/overlays/kind` | Local cluster settings: image tags, NodePort, secrets |
 | `kind/cluster.yaml` | Local kind cluster definition |
+| `k8s/overlays/aws` | K3s on EC2 settings: image tags, Traefik ingress, secrets |
 | `scripts/kind-up.sh` | Creates the cluster and deploys the app |
+| `scripts/aws-deploy.sh` | Deploys the app to the K3s server on EC2 |
 | `terraform/aws` | AWS network and EC2 server for K3s |
 | `ansible` | Server hardening and K3s installation |
 
@@ -126,10 +128,19 @@ cd ../../ansible
 ansible-playbook playbooks/site.yml
 ```
 
+Deploy the app. The script renders `k8s/overlays/aws` locally and applies it over SSH, so it needs `kubectl` on your machine but not access to port 6443:
+
+```bash
+cd ..
+./scripts/aws-deploy.sh
+```
+
+K3s's built-in Traefik serves the website on port 80 of the server. The script generates `k8s/overlays/aws/secrets.env` on first run. Keep it while the server exists: a new file would change the database password and lock the backend out of the existing database.
+
 Remove everything when you are done:
 
 ```bash
-cd ../terraform/aws
+cd terraform/aws
 terraform destroy
 ```
 
@@ -137,7 +148,7 @@ Terraform state is stored locally and is never committed. It describes your AWS 
 
 ## Deploying a new version
 
-Images are built and scanned by the app repo's CI and published to GHCR, tagged with the commit SHA. To deploy a new version, update `newTag` in `k8s/overlays/kind/kustomization.yaml` and apply the overlay again.
+Images are built and scanned by the app repo's CI and published to GHCR, tagged with the commit SHA. To deploy a new version, update `newTag` in `k8s/overlays/kind/kustomization.yaml` or `k8s/overlays/aws/kustomization.yaml` and apply the overlay again.
 
 ## Database schema
 

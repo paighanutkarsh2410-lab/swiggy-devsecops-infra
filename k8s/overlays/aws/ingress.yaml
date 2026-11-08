@@ -1,0 +1,20 @@
+# K3s ships Traefik, which listens on ports 80 and 443 of the server.
+# This sends all website traffic to the frontend; Nginx in the frontend
+# forwards /api to the backend.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: swiggy
+  namespace: swiggy
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
