@@ -105,6 +105,38 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ALL
+    # The datasource sidecar is a second ~85 MB Python process that only
+    # loads one datasource; Grafana reads it from its own config instead.
+    datasources:
+      enabled: false
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          uid: prometheus
+          url: http://kps-prometheus.monitoring:9090/
+          access: proxy
+          isDefault: true
+          jsonData:
+            timeInterval: 30s
+  # Alerts are evaluated by Prometheus and routed by Alertmanager, so
+  # Grafana's own alerting engine is off. Nothing is downloaded at startup.
+  grafana.ini:
+    unified_alerting:
+      enabled: false
+    plugins:
+      preinstall_disabled: true
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false
+      check_for_plugin_updates: false
+    news:
+      news_feed_enabled: false
+  env:
+    # Soft heap limit; see bootstrap/argocd/kustomization.yaml.
+    GOMEMLIMIT: 160MiB
   defaultDashboardsTimezone: browser
   # Only the Swiggy dashboard is loaded. The chart's ~25 built-in Kubernetes
   # dashboards cost Grafana memory and need the metrics switched off above.

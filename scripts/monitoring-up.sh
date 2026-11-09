@@ -43,13 +43,18 @@ kubectl wait --for condition=established --timeout=60s \
 
 "$ROOT/scripts/swiggy-app.sh" "$REVISION" true
 
-echo "Waiting for the monitoring stack to become healthy (a few minutes)..."
-for _ in $(seq 1 90); do
-  health="$(kubectl -n argocd get application monitoring -o jsonpath='{.status.health.status}' 2>/dev/null || true)"
-  [ "$health" = "Healthy" ] && break
+# Argo CD can report Healthy before the operator has created Prometheus and
+# Alertmanager, so wait for the workloads themselves.
+echo "Waiting for the monitoring stack to start (a few minutes on a fresh cluster)..."
+for _ in $(seq 1 60); do
+  kubectl -n monitoring get statefulset prometheus-kps-prometheus alertmanager-kps-alertmanager >/dev/null 2>&1 && break
   sleep 5
 done
-echo "Monitoring application: health=${health:-unknown}"
+kubectl -n monitoring rollout status deployment/kps-grafana --timeout=600s
+kubectl -n monitoring rollout status statefulset/prometheus-kps-prometheus --timeout=600s
+kubectl -n monitoring rollout status statefulset/alertmanager-kps-alertmanager --timeout=300s
+echo "Monitoring application: $(kubectl -n argocd get application monitoring \
+  -o jsonpath='sync={.status.sync.status} health={.status.health.status}')"
 kubectl -n monitoring get pods
 
 echo "Grafana: kubectl -n monitoring port-forward svc/kps-grafana 3001:80, then http://localhost:3001"
