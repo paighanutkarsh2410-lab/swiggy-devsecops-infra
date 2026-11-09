@@ -1,0 +1,10 @@
+version: 2
+
+updates:
+  # Actions are pinned to commit SHAs in the workflows; Dependabot proposes
+  # new pins, with the version in a comment, once a week.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 2

@@ -10,8 +10,9 @@ image:
   # With a digest, Kubernetes runs exactly those bytes even if the tag is
   # later pushed again; the tag stays in the reference for readability.
   digests: {}
-  # When true, every image must have a digest.
-  requireDigest: false
+  # Every image must have a digest: CI verifies the signature of exactly
+  # that digest (validate.yml, Verify Image Signatures).
+  requireDigest: true
   pullPolicy: IfNotPresent
 
 # Created outside Git by scripts/kind-up.sh or scripts/aws-deploy.sh, with
