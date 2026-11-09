@@ -1,7 +1,7 @@
 # kube-prometheus-stack settings for the local kind cluster.
 # Argo CD installs the chart with this file (argocd/monitoring.yaml).
-# Sized for a small VM: every component has requests and limits, and
-# Prometheus keeps one day of data.
+# Sized for a small VM: every component has requests and limits, Prometheus
+# keeps 12 hours of data, and only what this project looks at is collected.
 
 fullnameOverride: kps
 
@@ -16,6 +16,17 @@ kubeControllerManager:
 kubeProxy:
   enabled: false
 
+# The API server's own metrics were over half of all series in Prometheus
+# (32,000 of 60,000) and only feed the API server SLO rules switched off below.
+kubeApiServer:
+  enabled: false
+
+kubelet:
+  serviceMonitor:
+    # Duplicates of what the kubelet and cAdvisor endpoints already give.
+    probes: false
+    resource: false
+
 defaultRules:
   rules:
     etcd: false
@@ -24,6 +35,21 @@ defaultRules:
     kubeSchedulerAlerting: false
     kubeSchedulerRecording: false
     windows: false
+    # Need the API server metrics, which are not collected.
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeApiserverHistogram: false
+    kubeApiserverSlos: false
+    # Per-container CPU and memory recording rules, and the cluster capacity
+    # alerts built on them; they only fed the built-in dashboards.
+    k8sContainerCpuUsageSecondsTotal: false
+    k8sContainerMemoryCache: false
+    k8sContainerMemoryRss: false
+    k8sContainerMemorySwap: false
+    k8sContainerMemoryWorkingSetBytes: false
+    k8sContainerResource: false
+    kubernetesResources: false
+    network: false
 
 windowsMonitoring:
   enabled: false
@@ -41,9 +67,11 @@ prometheusOperator:
 
 prometheus:
   prometheusSpec:
-    retention: 24h
-    retentionSize: 1GB
-    scrapeInterval: 30s
+    retention: 12h
+    retentionSize: 512MB
+    # Cluster targets every minute. The swiggy backend's ServiceMonitor keeps
+    # its own 30-second interval so the dashboard's 1-minute rates still work.
+    scrapeInterval: 60s
     evaluationInterval: 30s
     # Pick up ServiceMonitors and PrometheusRules from any namespace, not
     # only ones carrying this Helm release's label. The swiggy chart ships
@@ -53,8 +81,8 @@ prometheus:
     ruleSelectorNilUsesHelmValues: false
     probeSelectorNilUsesHelmValues: false
     resources:
-      requests: { cpu: 100m, memory: 300Mi }
-      limits: { cpu: 500m, memory: 700Mi }
+      requests: { cpu: 100m, memory: 160Mi }
+      limits: { cpu: 500m, memory: 512Mi }
 
 alertmanager:
   alertmanagerSpec:
@@ -78,12 +106,30 @@ grafana:
       labelValue: "1"
       searchNamespace: ALL
   defaultDashboardsTimezone: browser
-  # 256Mi was OOMKilled while loading a dashboard on Grafana 13.
+  # Only the Swiggy dashboard is loaded. The chart's ~25 built-in Kubernetes
+  # dashboards cost Grafana memory and need the metrics switched off above.
+  defaultDashboardsEnabled: false
+  # Grafana's own metrics were 5,000 series; nothing here uses them.
+  serviceMonitor:
+    enabled: false
+  # 256Mi was OOMKilled while loading the built-in dashboards on Grafana 13.
   resources:
-    requests: { cpu: 25m, memory: 192Mi }
-    limits: { cpu: 500m, memory: 512Mi }
+    requests: { cpu: 25m, memory: 160Mi }
+    limits: { cpu: 500m, memory: 384Mi }
 
 kube-state-metrics:
+  # Only the object types the alerts and dashboard read, plus the ones the
+  # remaining built-in alerts use.
+  collectors:
+    - daemonsets
+    - deployments
+    - jobs
+    - namespaces
+    - nodes
+    - persistentvolumeclaims
+    - pods
+    - replicasets
+    - statefulsets
   resources:
     requests: { cpu: 10m, memory: 32Mi }
     limits: { cpu: 100m, memory: 96Mi }
