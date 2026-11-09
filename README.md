@@ -147,6 +147,8 @@ The app's chart adds, on kind only:
 
 - A Grafana dashboard, **Swiggy DevSecOps - Overview**: replicas up, request rate, 5xx rate, p95 response time, live partner consoles, requests by route, latency percentiles, responses by status code, order status changes, backend memory and restarts.
 
+  ![Grafana dashboard with live traffic on kind](docs/images/grafana-overview.jpg)
+
 CI renders the monitoring stack and validates it, checks the alert rules with `promtool check rules`, and runs `promtool test rules` on `monitoring/tests/swiggy-alerts-test.yaml`, which feeds the rules sample data and checks each alert fires, or stays quiet, when it should.
 
 Open Grafana:
