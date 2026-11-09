@@ -162,7 +162,7 @@ Monitoring is optional on kind. Turn it on and off with:
 - The API server's own metrics, over half of all series, are not collected, and neither are Grafana's. Cluster targets are scraped every 60 seconds, the backend every 30.
 - Grafana loads only the Swiggy dashboard, reads its Prometheus datasource from config instead of a sidecar, and leaves alerting to Alertmanager.
 
-The app's chart adds, on kind only:
+While monitoring is on, the app's chart adds (on kind only):
 
 - A ServiceMonitor, so Prometheus scrapes the backend's `/metrics` every 30 seconds, and a network policy that lets only the `monitoring` namespace reach the backend's port.
 - Alert rules (`charts/swiggy/templates/monitoring.yaml`):
