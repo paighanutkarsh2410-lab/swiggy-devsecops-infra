@@ -2,7 +2,7 @@
 # sets ingress.partnerHost from the server IP.
 image:
   # Updated by pull requests from swiggy-devsecops-app's CI.
-  tag: "4847bb24ef9dd4cacb3d8777259073f5f0928bcd"
+  tag: "3d4de91d4b6a01cc7faf89c9c7afcfc3092e0b3d"
 
 ingress:
   enabled: true
