@@ -10,3 +10,7 @@ web:
   partner:
     # kind/cluster.yaml maps this to http://localhost:8083.
     nodePort: 30082
+
+# kube-prometheus-stack runs on kind (argocd/monitoring.yaml).
+monitoring:
+  enabled: true

@@ -1,0 +1,10 @@
+# Namespace for kube-prometheus-stack, created with the Grafana admin Secret
+# before Argo CD installs the chart. node-exporter reads host metrics, so this
+# namespace cannot use the restricted Pod Security Standard that the app's
+# namespace enforces; it is labelled privileged explicitly instead.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    pod-security.kubernetes.io/enforce: privileged

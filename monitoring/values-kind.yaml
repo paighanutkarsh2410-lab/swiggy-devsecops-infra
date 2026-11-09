@@ -1,0 +1,94 @@
+# kube-prometheus-stack settings for the local kind cluster.
+# Argo CD installs the chart with this file (argocd/monitoring.yaml).
+# Sized for a small VM: every component has requests and limits, and
+# Prometheus keeps one day of data.
+
+fullnameOverride: kps
+
+# kind does not expose these control plane components to Prometheus, so
+# scraping them would only produce "target down" alerts.
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+defaultRules:
+  rules:
+    etcd: false
+    kubeControllerManager: false
+    kubeProxy: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    windows: false
+
+windowsMonitoring:
+  enabled: false
+
+prometheusOperator:
+  # The admission webhook needs certificate jobs and extra RBAC; the
+  # PrometheusRule objects here are validated in CI with kubeconform instead.
+  admissionWebhooks:
+    enabled: false
+  tls:
+    enabled: false
+  resources:
+    requests: { cpu: 20m, memory: 48Mi }
+    limits: { cpu: 200m, memory: 128Mi }
+
+prometheus:
+  prometheusSpec:
+    retention: 24h
+    retentionSize: 1GB
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    # Pick up ServiceMonitors and PrometheusRules from any namespace, not
+    # only ones carrying this Helm release's label. The swiggy chart ships
+    # its own in the swiggy namespace.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    resources:
+      requests: { cpu: 100m, memory: 300Mi }
+      limits: { cpu: 500m, memory: 700Mi }
+
+alertmanager:
+  alertmanagerSpec:
+    retention: 24h
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { cpu: 100m, memory: 64Mi }
+
+grafana:
+  # Admin login comes from a Secret created by scripts/kind-up.sh, never from Git.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # Loads dashboards from ConfigMaps labelled grafana_dashboard=1 in any
+  # namespace, including the swiggy app's dashboard.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+  defaultDashboardsTimezone: browser
+  # 256Mi was OOMKilled while loading a dashboard on Grafana 13.
+  resources:
+    requests: { cpu: 25m, memory: 192Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+kube-state-metrics:
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { cpu: 100m, memory: 96Mi }
+
+prometheus-node-exporter:
+  resources:
+    requests: { cpu: 10m, memory: 24Mi }
+    limits: { cpu: 100m, memory: 64Mi }

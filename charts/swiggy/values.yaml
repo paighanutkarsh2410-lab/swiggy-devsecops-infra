@@ -57,3 +57,10 @@ ingress:
   # Host name that routes to the partner console. Every other host goes to
   # the customer app.
   partnerHost: ""
+
+# Prometheus scraping, alert rules and the Grafana dashboard. Needs the
+# kube-prometheus-stack CRDs, so it is only turned on where that is installed.
+monitoring:
+  enabled: false
+  # Namespace Prometheus runs in; it alone may reach the backend's port.
+  namespace: monitoring

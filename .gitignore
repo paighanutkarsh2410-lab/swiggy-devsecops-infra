@@ -4,3 +4,10 @@ secrets.env
 .terraform/
 *.tfvars
 !*.tfvars.example
+
+# Generated per environment by the bootstrap scripts.
+bootstrap/kind/
+bootstrap/aws/
+
+# Rendered from the chart by CI for promtool.
+monitoring/tests/swiggy-rules.yaml

@@ -52,19 +52,44 @@ jobs:
           echo "aws:  $aws_tag"
           [ -n "$kind_tag" ] && [ "$kind_tag" = "$aws_tag" ]
 
+      # Same chart version and settings as argocd/monitoring.yaml.
+      - name: Render the monitoring stack
+        run: |
+          version=$(yq '.spec.sources[0].targetRevision' argocd/monitoring.yaml)
+          echo "kube-prometheus-stack $version"
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm template kps prometheus-community/kube-prometheus-stack --version "$version" \
+            -n monitoring -f monitoring/values-kind.yaml > rendered-monitoring.yaml
+
       - name: Install kubeconform
         run: |
           curl -fsSLO "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
           tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
 
-      # Argo CD's Application and AppProject are custom resources, so their
+      # Argo CD and Prometheus Operator objects are custom resources, so their
       # schemas come from the community CRD catalog.
-      - name: Validate against Kubernetes and Argo CD schemas
+      - name: Validate against Kubernetes, Argo CD and Prometheus Operator schemas
         run: |
           ./kubeconform -strict -summary \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-            rendered-kind.yaml rendered-aws.yaml bootstrap/namespace.yaml argocd/
+            rendered-kind.yaml rendered-aws.yaml rendered-monitoring.yaml \
+            bootstrap/namespace.yaml bootstrap/monitoring-namespace.yaml argocd/
+
+      # The image matches the Prometheus version the monitoring chart runs.
+      - name: Check and unit-test the alert rules with promtool
+        run: |
+          yq 'select(.kind == "PrometheusRule") | .spec' rendered-kind.yaml \
+            > monitoring/tests/swiggy-rules.yaml
+          promtool() {
+            docker run --rm -v "$PWD/monitoring/tests:/t:ro" -w /t \
+              --entrypoint promtool quay.io/prometheus/prometheus:v3.15.0 "$@"
+          }
+          promtool check rules swiggy-rules.yaml
+          promtool test rules swiggy-alerts-test.yaml
+
+      - name: Check the Grafana dashboard is valid JSON
+        run: jq -e '.panels | length > 0' charts/swiggy/files/dashboard.json
 
   terraform:
     name: Validate Terraform
