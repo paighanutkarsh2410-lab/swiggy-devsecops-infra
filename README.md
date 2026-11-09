@@ -9,8 +9,8 @@ This repository is the GitOps source of truth: what is on `main` here is what ru
 | Path | Purpose |
 |---|---|
 | `charts/swiggy` | Helm chart for the whole app: customer app, partner console, API, PostgreSQL, network policies, ingress |
-| `charts/swiggy/values-kind.yaml` | Local kind settings: image tag, NodePorts |
-| `charts/swiggy/values-aws.yaml` | K3s on EC2 settings: image tag, Traefik host routing |
+| `charts/swiggy/values-kind.yaml` | Local kind settings: image tag and digests, NodePorts |
+| `charts/swiggy/values-aws.yaml` | K3s on EC2 settings: image tag and digests, Traefik host routing |
 | `argocd/` | Argo CD projects and Applications for the kind cluster: the app and the monitoring stack |
 | `monitoring/values-kind.yaml` | kube-prometheus-stack settings: Prometheus, Alertmanager, Grafana |
 | `monitoring/tests/` | promtool unit tests for the alert rules |
@@ -61,17 +61,18 @@ On AWS, Traefik routes by host name. [sslip.io](https://sslip.io) resolves names
 
 ```mermaid
 flowchart LR
-    Merge[Merge to app main] --> CI[App CI: tests, scans,<br/>3 images to GHCR]
-    CI --> PR[PR here bumping<br/>image.tag]
-    PR --> Checks[Infra CI: helm lint,<br/>kubeconform, Trivy]
+    Merge[Merge to app main] --> CI[App CI: tests, Trivy,<br/>OWASP ZAP, SBOMs]
+    CI --> Sign[3 images to GHCR,<br/>signed with cosign]
+    Sign --> PR[PR here: image.tag<br/>and digests]
+    PR --> Checks[Infra CI: signatures,<br/>helm lint, kubeconform, Trivy]
     Checks --> Main[Merge to infra main]
     Main --> Argo[Argo CD syncs kind]
     Main --> AWS[aws-deploy.sh<br/>for AWS]
 ```
 
-1. A merge to `main` in the app repo runs its tests and Trivy scans, then publishes the three images tagged with the commit SHA.
-2. The app repo's CI opens a pull request here that changes `image.tag` in both values files. This needs the `INFRA_REPO_TOKEN` secret described in the app repo's README.
-3. This repo's CI lints and renders the chart for both environments and validates it.
+1. A merge to `main` in the app repo runs its tests, Trivy scans and an OWASP ZAP scan of the running app, then publishes the three images tagged with the commit SHA, signs each one with cosign and attaches its SBOM as a signed attestation.
+2. The app repo's CI opens a pull request here that changes `image.tag` and each image's sha256 digest in both values files. This needs the `INFRA_REPO_TOKEN` secret described in the app repo's README.
+3. This repo's CI checks that every image digest is signed by the app repo's `ci.yml` workflow on `main` and carries a signed SBOM, and lints, renders and validates the chart for both environments. All of these checks are required before a pull request can merge.
 4. Merging the pull request is the deployment. Argo CD notices the new commit on `main` within 3 minutes and rolls it out to kind; AWS gets it on the next `aws-deploy.sh`.
 
 To roll back, revert the commit on `main`. Argo CD returns the cluster to the previous version.
@@ -93,6 +94,9 @@ The namespace and the `swiggy-secrets` Secret are created by the bootstrap scrip
 - Secrets are generated locally into `bootstrap/<environment>/secrets.env`, which is never committed.
 - Argo CD is installed from the commit of its signed `v3.5.7` release tag, and the manifest's SHA-256 is checked before it is applied.
 - The chart only accepts a quoted, full 40-character commit SHA as the image tag, so a mutable tag like `latest` cannot be deployed by mistake.
+- Every app image is also pinned by its sha256 digest (`image.digests`, required by `image.requireDigest`), so Kubernetes runs exactly the bytes that were signed even if a tag is pushed again.
+- The **Verify Image Signatures** CI job runs `cosign verify` and `cosign verify-attestation --type cyclonedx` on each digest. The Sigstore certificate must name `swiggy-devsecops-app/.github/workflows/ci.yml@refs/heads/main`, issued through GitHub's OIDC provider, so an unsigned image, or one signed by another repository, workflow or branch, cannot be deployed. The job is a required check on `main`.
+- Every GitHub Action is pinned to a commit SHA, and Dependabot proposes updated pins.
 - The EC2 server requires IMDSv2, encrypts its disk, and only accepts SSH and Kubernetes API traffic from one admin address.
 - Ansible disables root and password SSH logins, and turns on automatic security updates.
 - K3s is installed from a pinned release with its checksum verified, and encrypts Kubernetes Secrets at rest.
