@@ -1,7 +1,7 @@
 # Local kind cluster. Argo CD deploys the chart with this file.
 image:
   # Updated by pull requests from swiggy-devsecops-app's CI.
-  tag: "82d9845bb70e402dfa72bd44be73775fabf556a3"
+  tag: "4847bb24ef9dd4cacb3d8777259073f5f0928bcd"
 
 web:
   frontend:
