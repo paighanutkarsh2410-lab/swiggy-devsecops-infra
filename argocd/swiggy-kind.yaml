@@ -1,0 +1,34 @@
+# Argo CD keeps the swiggy namespace of the local kind cluster in line with
+# charts/swiggy on the main branch, using values-kind.yaml.
+#   automated.prune:    objects removed from Git are removed from the cluster
+#   automated.selfHeal: manual changes in the cluster are reverted
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: swiggy
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: swiggy
+  source:
+    repoURL: https://github.com/paighanutkarsh2410-lab/swiggy-devsecops-infra.git
+    targetRevision: main
+    path: charts/swiggy
+    helm:
+      releaseName: swiggy
+      valueFiles:
+        - values-kind.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: swiggy
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

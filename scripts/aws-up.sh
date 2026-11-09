@@ -6,7 +6,7 @@
 set -euo pipefail
 source "$(dirname "$0")/aws-common.sh"
 
-need aws terraform ansible-playbook kubectl ssh ssh-keygen curl openssl
+need aws terraform ansible-playbook kubectl helm ssh ssh-keygen curl openssl
 check_aws
 write_tfvars
 

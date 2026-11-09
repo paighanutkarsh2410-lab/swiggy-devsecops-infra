@@ -24,7 +24,7 @@ else
 fi
 
 # The database went with the server, so its secrets are no longer needed.
-rm -f "$ROOT/k8s/overlays/aws/secrets.env"
+rm -f "$ROOT/bootstrap/aws/secrets.env"
 
 remaining="$(leftovers)"
 if [ -n "$remaining" ]; then

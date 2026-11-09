@@ -1,9 +1,22 @@
 apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  labels:
+    {{- include "swiggy.labels" . | nindent 4 }}
+data:
+  # Copy of backend/db/init.sql from swiggy-devsecops-app. It only runs when
+  # the database volume is first created.
+  01-init.sql: |
+    {{- .Files.Get "files/init.sql" | nindent 4 }}
+---
+apiVersion: v1
 kind: Service
 metadata:
   name: postgres
   labels:
     app.kubernetes.io/name: postgres
+    {{- include "swiggy.labels" . | nindent 4 }}
 spec:
   clusterIP: None
   selector:
@@ -19,6 +32,7 @@ metadata:
   name: postgres
   labels:
     app.kubernetes.io/name: postgres
+    {{- include "swiggy.labels" . | nindent 4 }}
 spec:
   serviceName: postgres
   replicas: 1
@@ -29,6 +43,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: postgres
+        {{- include "swiggy.labels" . | nindent 8 }}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -40,44 +55,36 @@ spec:
           type: RuntimeDefault
       containers:
         - name: postgres
-          image: postgres:16
-          imagePullPolicy: IfNotPresent
+          image: {{ .Values.postgres.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: postgres
               containerPort: 5432
           env:
             - name: POSTGRES_DB
-              value: swiggy_db
+              value: {{ .Values.database.name | quote }}
             - name: POSTGRES_USER
-              value: swiggy_app
+              value: {{ .Values.database.user | quote }}
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: swiggy-secrets
+                  name: {{ .Values.secretName }}
                   key: DB_PASSWORD
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
           readinessProbe:
             exec:
-              command: ["pg_isready", "-U", "swiggy_app", "-d", "swiggy_db"]
+              command: ["pg_isready", "-U", {{ .Values.database.user | quote }}, "-d", {{ .Values.database.name | quote }}]
             periodSeconds: 10
           livenessProbe:
             exec:
-              command: ["pg_isready", "-U", "swiggy_app", "-d", "swiggy_db"]
+              command: ["pg_isready", "-U", {{ .Values.database.user | quote }}, "-d", {{ .Values.database.name | quote }}]
             initialDelaySeconds: 30
             periodSeconds: 20
           resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
+            {{- include "swiggy.containerSecurity" . | nindent 12 }}
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
@@ -101,6 +108,9 @@ spec:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+        {{- with .Values.postgres.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
         resources:
           requests:
-            storage: 1Gi
+            storage: {{ .Values.postgres.storage }}

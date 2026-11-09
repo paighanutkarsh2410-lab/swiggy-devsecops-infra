@@ -14,6 +14,7 @@ permissions:
 env:
   KUBECONFORM_VERSION: v0.6.7
   TERRAFORM_VERSION: 1.17.1
+  HELM_VERSION: v4.3.1
 
 jobs:
   kubernetes:
@@ -24,24 +25,46 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create placeholder secrets
-        run: |
-          for overlay in kind aws; do
-            cp "k8s/overlays/$overlay/secrets.env.example" "k8s/overlays/$overlay/secrets.env"
-          done
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
 
-      - name: Render manifests
+      - name: Lint the chart for each environment
         run: |
-          kubectl kustomize k8s/overlays/kind > rendered-kind.yaml
-          kubectl kustomize k8s/overlays/aws > rendered-aws.yaml
+          helm lint --strict charts/swiggy -f charts/swiggy/values-kind.yaml
+          helm lint --strict charts/swiggy -f charts/swiggy/values-aws.yaml \
+            --set ingress.partnerHost=partner.192-0-2-10.sslip.io
+
+      - name: Render the chart for each environment
+        run: |
+          helm template swiggy charts/swiggy -n swiggy \
+            -f charts/swiggy/values-kind.yaml > rendered-kind.yaml
+          helm template swiggy charts/swiggy -n swiggy \
+            -f charts/swiggy/values-aws.yaml \
+            --set ingress.partnerHost=partner.192-0-2-10.sslip.io > rendered-aws.yaml
+
+      - name: Check both environments deploy the same image tag
+        run: |
+          kind_tag=$(grep -m1 -oE 'swiggy-devsecops-backend:[0-9a-f]{40}' rendered-kind.yaml)
+          aws_tag=$(grep -m1 -oE 'swiggy-devsecops-backend:[0-9a-f]{40}' rendered-aws.yaml)
+          echo "kind: $kind_tag"
+          echo "aws:  $aws_tag"
+          [ -n "$kind_tag" ] && [ "$kind_tag" = "$aws_tag" ]
 
       - name: Install kubeconform
         run: |
           curl -fsSLO "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
           tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
 
-      - name: Validate against Kubernetes schemas
-        run: ./kubeconform -strict -summary rendered-kind.yaml rendered-aws.yaml
+      # Argo CD's Application and AppProject are custom resources, so their
+      # schemas come from the community CRD catalog.
+      - name: Validate against Kubernetes and Argo CD schemas
+        run: |
+          ./kubeconform -strict -summary \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            rendered-kind.yaml rendered-aws.yaml bootstrap/namespace.yaml argocd/
 
   terraform:
     name: Validate Terraform

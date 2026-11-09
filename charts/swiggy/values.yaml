@@ -1,0 +1,59 @@
+# Default settings for every environment. values-kind.yaml and
+# values-aws.yaml override what differs.
+
+image:
+  registry: ghcr.io/paighanutkarsh2410-lab
+  # Commit SHA of swiggy-devsecops-app. All three images are built from the
+  # same commit, so one tag covers them. CI proposes new tags as pull requests.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Created outside Git by scripts/kind-up.sh or scripts/aws-deploy.sh, with
+# the keys DB_PASSWORD and JWT_SECRET.
+secretName: swiggy-secrets
+
+database:
+  name: swiggy_db
+  user: swiggy_app
+
+postgres:
+  image: postgres:16
+  storage: 1Gi
+  # Empty uses the cluster's default storage class.
+  storageClassName: ""
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+backend:
+  image: swiggy-devsecops-backend
+  replicas: 2
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+# The two websites. Each is Nginx serving a React build and proxying /api
+# to the backend.
+web:
+  frontend:
+    description: Customer app
+    image: swiggy-devsecops-frontend
+    replicas: 2
+    # Set to expose the site on a node port, for example on kind.
+    nodePort: null
+  partner:
+    description: Restaurant partner console
+    image: swiggy-devsecops-partner
+    replicas: 2
+    nodePort: null
+
+webResources:
+  requests: { cpu: 25m, memory: 32Mi }
+  limits: { cpu: 250m, memory: 128Mi }
+
+ingress:
+  enabled: false
+  className: traefik
+  # Host name that routes to the partner console. Every other host goes to
+  # the customer app.
+  partnerHost: ""

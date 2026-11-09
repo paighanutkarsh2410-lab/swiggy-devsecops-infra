@@ -1,33 +1,45 @@
-# Restaurant partner console: a separate Nginx + React site using the same API.
+{{- /* One Service and Deployment per website: the customer app and the partner console. */}}
+{{- range $name, $site := .Values.web }}
+---
+# {{ $site.description }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: partner
+  name: {{ $name }}
   labels:
-    app.kubernetes.io/name: partner
+    app.kubernetes.io/name: {{ $name }}
+    {{- include "swiggy.labels" $ | nindent 4 }}
 spec:
+  {{- if $site.nodePort }}
+  type: NodePort
+  {{- end }}
   selector:
-    app.kubernetes.io/name: partner
+    app.kubernetes.io/name: {{ $name }}
   ports:
     - name: http
       port: 8080
       targetPort: http
+      {{- with $site.nodePort }}
+      nodePort: {{ . }}
+      {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: partner
+  name: {{ $name }}
   labels:
-    app.kubernetes.io/name: partner
+    app.kubernetes.io/name: {{ $name }}
+    {{- include "swiggy.labels" $ | nindent 4 }}
 spec:
-  replicas: 2
+  replicas: {{ $site.replicas }}
   selector:
     matchLabels:
-      app.kubernetes.io/name: partner
+      app.kubernetes.io/name: {{ $name }}
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: partner
+        app.kubernetes.io/name: {{ $name }}
+        {{- include "swiggy.labels" $ | nindent 8 }}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -37,9 +49,9 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: partner
-          image: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-partner
-          imagePullPolicy: IfNotPresent
+        - name: {{ $name }}
+          image: {{ include "swiggy.image" (dict "root" $ "name" $site.image) }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 8080
@@ -55,17 +67,9 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 20
           resources:
-            requests:
-              cpu: 25m
-              memory: 32Mi
-            limits:
-              cpu: 250m
-              memory: 128Mi
+            {{- toYaml $.Values.webResources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
+            {{- include "swiggy.containerSecurity" $ | nindent 12 }}
           volumeMounts:
             # nginx-unprivileged keeps its pid file and caches in /tmp.
             - name: tmp
@@ -73,3 +77,4 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+{{- end }}

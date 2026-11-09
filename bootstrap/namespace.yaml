@@ -1,3 +1,5 @@
+# Created before Argo CD or Helm deploy the app, together with the
+# swiggy-secrets Secret, which is never stored in Git.
 apiVersion: v1
 kind: Namespace
 metadata:

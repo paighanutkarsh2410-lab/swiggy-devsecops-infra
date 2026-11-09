@@ -1,47 +1,40 @@
 # Deny all incoming traffic by default, then allow only the paths the app needs:
-#   anyone -> frontend (customer app)  -> backend -> postgres
-#   anyone -> partner  (partner console) -> backend
+#   anyone -> customer app and partner console -> backend -> postgres
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-ingress
+  labels:
+    {{- include "swiggy.labels" . | nindent 4 }}
 spec:
   podSelector: {}
   policyTypes:
     - Ingress
+{{- range $name, $site := .Values.web }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-frontend
+  name: allow-{{ $name }}
+  labels:
+    {{- include "swiggy.labels" $ | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: frontend
+      app.kubernetes.io/name: {{ $name }}
   policyTypes:
     - Ingress
   ingress:
     - ports:
         - port: 8080
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-partner
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: partner
-  policyTypes:
-    - Ingress
-  ingress:
-    - ports:
-        - port: 8080
+{{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-backend-from-web
+  labels:
+    {{- include "swiggy.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
@@ -54,7 +47,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: ["frontend", "partner"]
+                values: {{ keys .Values.web | sortAlpha | toJson }}
       ports:
         - port: 3000
 ---
@@ -62,6 +55,8 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-postgres-from-backend
+  labels:
+    {{- include "swiggy.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
