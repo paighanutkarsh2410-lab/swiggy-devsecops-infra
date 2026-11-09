@@ -10,4 +10,3 @@ web:
   partner:
     # kind/cluster.yaml maps this to http://localhost:8083.
     nodePort: 30082
-    replicas: 1
