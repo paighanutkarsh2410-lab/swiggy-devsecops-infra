@@ -61,19 +61,38 @@ jobs:
           helm template kps prometheus-community/kube-prometheus-stack --version "$version" \
             -n monitoring -f monitoring/values-kind.yaml > rendered-monitoring.yaml
 
+      # The same pinned, checksum-verified Argo CD install that
+      # scripts/argocd-up.sh applies, with the trims in bootstrap/argocd.
+      - name: Render the trimmed Argo CD install
+        run: |
+          commit=$(sed -n 's/^ARGOCD_COMMIT="\(.*\)"$/\1/p' scripts/argocd-up.sh)
+          sha=$(sed -n 's/^ARGOCD_SHA256="\(.*\)"$/\1/p' scripts/argocd-up.sh)
+          work=$(mktemp -d)
+          curl -fsSL -o "$work/install.yaml" \
+            "https://raw.githubusercontent.com/argoproj/argo-cd/$commit/manifests/install.yaml"
+          echo "$sha  $work/install.yaml" | sha256sum --check
+          cp bootstrap/argocd/kustomization.yaml "$work/"
+          kubectl kustomize "$work" > rendered-argocd.yaml
+          echo "Argo CD workloads:"
+          yq 'select(.kind == "Deployment" or .kind == "StatefulSet") | .metadata.name' rendered-argocd.yaml
+          removed=$(yq 'select(.kind == "Deployment" and (.metadata.name | test("dex|notifications|applicationset"))) | .metadata.name' rendered-argocd.yaml)
+          [ -z "$removed" ]
+
       - name: Install kubeconform
         run: |
           curl -fsSLO "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
           tar -xzf kubeconform-linux-amd64.tar.gz kubeconform
 
       # Argo CD and Prometheus Operator objects are custom resources, so their
-      # schemas come from the community CRD catalog.
+      # schemas come from the community CRD catalog. The Argo CD CRDs
+      # themselves come unchanged from the checksum-verified upstream
+      # manifest, and kubeconform has no schema for CRD objects.
       - name: Validate against Kubernetes, Argo CD and Prometheus Operator schemas
         run: |
-          ./kubeconform -strict -summary \
+          ./kubeconform -strict -summary -skip CustomResourceDefinition \
             -schema-location default \
             -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
-            rendered-kind.yaml rendered-aws.yaml rendered-monitoring.yaml \
+            rendered-kind.yaml rendered-aws.yaml rendered-monitoring.yaml rendered-argocd.yaml \
             bootstrap/namespace.yaml bootstrap/monitoring-namespace.yaml argocd/
 
       # The image matches the Prometheus version the monitoring chart runs.

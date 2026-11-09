@@ -1,0 +1,87 @@
+# Trims the upstream Argo CD install for a small local VM. scripts/argocd-up.sh
+# downloads the pinned install.yaml, checks its SHA-256, puts it next to this
+# file and applies the result of `kubectl kustomize`. install.yaml itself is
+# never committed.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argocd
+
+resources:
+  - install.yaml
+
+patches:
+  # Components this project does not use: single sign-on (Dex),
+  # notifications and ApplicationSets. Removing them saves about 100 MB.
+  - patch: |
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-dex-server
+  - patch: |
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-notifications-controller
+  - patch: |
+      $patch: delete
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-applicationset-controller
+
+  # Fewer parallel workers: there are only two Applications.
+  - patch: |
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cmd-params-cm
+      data:
+        controller.status.processors: "4"
+        controller.operation.processors: "2"
+        controller.kubectl.parallelism.limit: "4"
+        reposerver.parallelism.limit: "1"
+
+  # A soft heap limit makes the Go garbage collector return memory sooner
+  # instead of letting the heap grow. It is not a hard limit, so nothing
+  # is killed if a sync briefly needs more.
+  - patch: |
+      apiVersion: apps/v1
+      kind: StatefulSet
+      metadata:
+        name: argocd-application-controller
+      spec:
+        template:
+          spec:
+            containers:
+              - name: argocd-application-controller
+                env:
+                  - name: GOMEMLIMIT
+                    value: 256MiB
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-repo-server
+      spec:
+        template:
+          spec:
+            containers:
+              - name: argocd-repo-server
+                env:
+                  - name: GOMEMLIMIT
+                    value: 96MiB
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: argocd-server
+      spec:
+        template:
+          spec:
+            containers:
+              - name: argocd-server
+                env:
+                  - name: GOMEMLIMIT
+                    value: 64MiB
