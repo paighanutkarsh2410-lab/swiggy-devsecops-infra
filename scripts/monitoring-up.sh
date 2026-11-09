@@ -33,13 +33,19 @@ kubectl apply -f "$ROOT/argocd/platform-project.yaml" >/dev/null
 sed "s|targetRevision: main|targetRevision: $REVISION|" "$ROOT/argocd/monitoring.yaml" | kubectl apply -f -
 
 # The app's ServiceMonitor and PrometheusRule need these CRDs to exist first.
+# (`kubectl wait` fails instead of waiting while a new CRD has no status yet.)
 echo "Waiting for the Prometheus Operator CRDs..."
+established=""
 for _ in $(seq 1 60); do
-  kubectl get crd servicemonitors.monitoring.coreos.com prometheusrules.monitoring.coreos.com >/dev/null 2>&1 && break
+  established="$(kubectl get crd servicemonitors.monitoring.coreos.com prometheusrules.monitoring.coreos.com \
+    -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Established")].status} {end}' 2>/dev/null || true)"
+  [ "$established" = "True True " ] && break
   sleep 5
 done
-kubectl wait --for condition=established --timeout=60s \
-  crd/servicemonitors.monitoring.coreos.com crd/prometheusrules.monitoring.coreos.com
+if [ "$established" != "True True " ]; then
+  echo "The Prometheus Operator CRDs were not created; check: kubectl -n argocd get application monitoring" >&2
+  exit 1
+fi
 
 "$ROOT/scripts/swiggy-app.sh" "$REVISION" true
 
