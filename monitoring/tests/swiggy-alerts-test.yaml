@@ -1,0 +1,91 @@
+# Unit tests for the swiggy alert rules, run in CI with:
+#   promtool test rules monitoring/tests/swiggy-alerts-test.yaml
+# CI first renders the chart and writes its PrometheusRule spec to
+# monitoring/tests/swiggy-rules.yaml (not committed).
+rule_files:
+  - swiggy-rules.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # Every backend target down: pending at first, firing after 1 minute.
+  - interval: 1m
+    input_series:
+      - series: 'up{namespace="swiggy", service="backend", pod="backend-a"}'
+        values: '0x10'
+      - series: 'up{namespace="swiggy", service="backend", pod="backend-b"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: SwiggyBackendDown
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: SwiggyBackendDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: No backend replica is answering Prometheus
+              description: Every swiggy backend target has been down for over a minute, so both websites' API calls are failing.
+
+  # One replica down out of two is not an outage.
+  - interval: 1m
+    input_series:
+      - series: 'up{namespace="swiggy", service="backend", pod="backend-a"}'
+        values: '1x10'
+      - series: 'up{namespace="swiggy", service="backend", pod="backend-b"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SwiggyBackendDown
+        exp_alerts: []
+
+  # 2 of every 10 requests fail (20%): fires once it has lasted 5 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'swiggy_http_request_duration_seconds_count{namespace="swiggy", route="/api/orders", status_code="201"}'
+        values: '0+8x20'
+      - series: 'swiggy_http_request_duration_seconds_count{namespace="swiggy", route="/api/orders", status_code="500"}'
+        values: '0+2x20'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: SwiggyHighErrorRate
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: SwiggyHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: More than 5% of API requests are failing
+              description: 20% of API requests returned a 5xx error over the last 5 minutes.
+
+  # 1 in 100 failing (1%) stays under the 5% threshold.
+  - interval: 1m
+    input_series:
+      - series: 'swiggy_http_request_duration_seconds_count{namespace="swiggy", route="/api/orders", status_code="201"}'
+        values: '0+99x20'
+      - series: 'swiggy_http_request_duration_seconds_count{namespace="swiggy", route="/api/orders", status_code="500"}'
+        values: '0+1x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: SwiggyHighErrorRate
+        exp_alerts: []
+
+  # Three restarts within 15 minutes.
+  - interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_restarts_total{namespace="swiggy", pod="backend-a", container="backend"}'
+        values: '0 0 1 2 3 3 3'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: SwiggyPodRestarting
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: swiggy
+              pod: backend-a
+              container: backend
+            exp_annotations:
+              summary: Pod backend-a keeps restarting
+              description: Container backend restarted more than twice in 15 minutes.

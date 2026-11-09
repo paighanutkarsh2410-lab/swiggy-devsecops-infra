@@ -41,7 +41,7 @@
       "id": 3, "type": "stat", "title": "5xx error rate",
       "gridPos": { "x": 9, "y": 0, "w": 5, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [{ "refId": "A", "expr": "sum(rate(swiggy_http_request_duration_seconds_count{namespace=\"swiggy\", status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(swiggy_http_request_duration_seconds_count{namespace=\"swiggy\"}[5m])), 1e-9)" }],
+      "targets": [{ "refId": "A", "expr": "(sum(rate(swiggy_http_request_duration_seconds_count{namespace=\"swiggy\", status_code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(swiggy_http_request_duration_seconds_count{namespace=\"swiggy\"}[5m])), 1e-9)" }],
       "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 2, "thresholds": { "mode": "absolute", "steps": [
         { "color": "green", "value": null }, { "color": "orange", "value": 0.01 }, { "color": "red", "value": 0.05 } ] } }, "overrides": [] },
       "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } }
