@@ -1,10 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  # Nginx in the frontend image proxies /api to http://backend:3000.
+  # Nginx in both website images proxies /api to http://backend:3000.
   name: backend
   labels:
     app.kubernetes.io/name: backend
+    {{- include "swiggy.labels" . | nindent 4 }}
 spec:
   selector:
     app.kubernetes.io/name: backend
@@ -19,8 +20,9 @@ metadata:
   name: backend
   labels:
     app.kubernetes.io/name: backend
+    {{- include "swiggy.labels" . | nindent 4 }}
 spec:
-  replicas: 2
+  replicas: {{ .Values.backend.replicas }}
   selector:
     matchLabels:
       app.kubernetes.io/name: backend
@@ -28,6 +30,7 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: backend
+        {{- include "swiggy.labels" . | nindent 8 }}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -38,8 +41,8 @@ spec:
           type: RuntimeDefault
       containers:
         - name: backend
-          image: ghcr.io/paighanutkarsh2410-lab/swiggy-devsecops-backend
-          imagePullPolicy: IfNotPresent
+          image: {{ include "swiggy.image" (dict "root" . "name" .Values.backend.image) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
               containerPort: 3000
@@ -51,18 +54,18 @@ spec:
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
-              value: swiggy_db
+              value: {{ .Values.database.name | quote }}
             - name: DB_USER
-              value: swiggy_app
+              value: {{ .Values.database.user | quote }}
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: swiggy-secrets
+                  name: {{ .Values.secretName }}
                   key: DB_PASSWORD
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: swiggy-secrets
+                  name: {{ .Values.secretName }}
                   key: JWT_SECRET
           readinessProbe:
             httpGet:
@@ -76,14 +79,6 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 20
           resources:
-            requests:
-              cpu: 50m
-              memory: 96Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
+            {{- toYaml .Values.backend.resources | nindent 12 }}
           securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            capabilities:
-              drop: ["ALL"]
+            {{- include "swiggy.containerSecurity" . | nindent 12 }}

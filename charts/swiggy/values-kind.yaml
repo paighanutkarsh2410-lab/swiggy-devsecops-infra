@@ -1,0 +1,12 @@
+# Local kind cluster. Argo CD deploys the chart with this file.
+image:
+  # Updated by pull requests from swiggy-devsecops-app's CI.
+  tag: 05003cb2a8532dbae0848372507375d7716367a6
+
+web:
+  frontend:
+    # kind/cluster.yaml maps this to http://localhost:8081.
+    nodePort: 30080
+  partner:
+    # kind/cluster.yaml maps this to http://localhost:8083.
+    nodePort: 30082

@@ -1,0 +1,33 @@
+{{- if .Values.ingress.enabled }}
+{{- $partnerHost := required "ingress.partnerHost is required when the ingress is enabled" .Values.ingress.partnerHost }}
+# Routes by host name: the partner host goes to the partner console, and
+# every other host, including the bare server IP, goes to the customer app.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: swiggy
+  labels:
+    {{- include "swiggy.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ $partnerHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: partner
+                port:
+                  name: http
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
+{{- end }}

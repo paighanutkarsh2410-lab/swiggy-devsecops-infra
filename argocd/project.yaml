@@ -1,0 +1,26 @@
+# Limits what the swiggy Application can do, so a bad commit in this repo
+# cannot touch anything outside the app:
+# - only this repository as a source
+# - only the swiggy namespace of the local cluster as a destination
+# - no cluster-wide objects (Namespaces, ClusterRoles, CRDs and so on)
+# - no RBAC objects inside the namespace either
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: swiggy
+  namespace: argocd
+spec:
+  description: Swiggy DevSecOps demo
+  sourceRepos:
+    - https://github.com/paighanutkarsh2410-lab/swiggy-devsecops-infra.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: swiggy
+  clusterResourceWhitelist: []
+  namespaceResourceBlacklist:
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
+    - group: ""
+      kind: ServiceAccount

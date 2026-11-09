@@ -1,0 +1,9 @@
+# K3s on EC2. scripts/aws-deploy.sh renders the chart with this file and
+# sets ingress.partnerHost from the server IP.
+image:
+  # Updated by pull requests from swiggy-devsecops-app's CI.
+  tag: 05003cb2a8532dbae0848372507375d7716367a6
+
+ingress:
+  enabled: true
+  className: traefik
