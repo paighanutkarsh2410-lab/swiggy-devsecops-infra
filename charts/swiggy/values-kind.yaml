@@ -1,11 +1,11 @@
 # Local kind cluster. Argo CD deploys the chart with this file.
 image:
   # Tag and digests are updated by pull requests from swiggy-devsecops-app's CI.
-  tag: "3d4de91d4b6a01cc7faf89c9c7afcfc3092e0b3d"
+  tag: "3182165e86dba7dcaec4a21aead434653111e047"
   digests:
-    swiggy-devsecops-backend: "sha256:5b06037a0a437ee4ee03a7a70a4c770e91823e2e216c8d08d5bbfb1fa718113b"
-    swiggy-devsecops-frontend: "sha256:afe38918475c01d3e291942a8d3d66c3bc2e7e20b6892cd8c63e78d2e586fefb"
-    swiggy-devsecops-partner: "sha256:dbfc2c7f435d00501712ce2fb07e884fa18a7595c78e301020a949bd96c283a9"
+    swiggy-devsecops-backend: "sha256:e4b45286f01896cff88c1c010a28247a684f580b9ce8aac79fd0221c10597c6b"
+    swiggy-devsecops-frontend: "sha256:5762883268e7911b723272e4136f473132ab16a58bef4b61cd79a849002f2a3d"
+    swiggy-devsecops-partner: "sha256:9f462dea30694c9b38ab95af761bfef03f22353185839fd64a2b8f772733ff61"
 
 web:
   frontend:
