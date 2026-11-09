@@ -33,9 +33,12 @@ for deployment in argocd-server argocd-repo-server argocd-redis; do
 done
 kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=300s
 
-# The project limits what this app may deploy; the Application tells Argo CD
-# where the chart is and which revision to follow.
+# Each project limits what its applications may deploy; each Application
+# tells Argo CD where its chart is and which revision of this repo to follow.
 kubectl apply -f "$ROOT/argocd/project.yaml"
-sed "s|targetRevision: main|targetRevision: $REVISION|" "$ROOT/argocd/swiggy-kind.yaml" | kubectl apply -f -
+kubectl apply -f "$ROOT/argocd/platform-project.yaml"
+for app in swiggy-kind monitoring; do
+  sed "s|targetRevision: main|targetRevision: $REVISION|" "$ROOT/argocd/$app.yaml" | kubectl apply -f -
+done
 
-echo "Argo CD is following $REVISION of charts/swiggy."
+echo "Argo CD is following $REVISION of this repository for the app and the monitoring stack."

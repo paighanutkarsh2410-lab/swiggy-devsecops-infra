@@ -1,0 +1,40 @@
+# Argo CD installs kube-prometheus-stack (Prometheus, Alertmanager, Grafana,
+# the Prometheus Operator, kube-state-metrics and node-exporter) into the
+# monitoring namespace. The chart version is pinned; the settings come from
+# monitoring/values-kind.yaml in this repository.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.11.1
+      helm:
+        releaseName: kps
+        valueFiles:
+          - $values/monitoring/values-kind.yaml
+    - repoURL: https://github.com/paighanutkarsh2410-lab/swiggy-devsecops-infra.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # The Prometheus Operator CRDs are too large for client-side apply.
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

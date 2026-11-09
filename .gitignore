@@ -4,3 +4,7 @@ secrets.env
 .terraform/
 *.tfvars
 !*.tfvars.example
+
+# Generated per environment by the bootstrap scripts.
+bootstrap/kind/
+bootstrap/aws/

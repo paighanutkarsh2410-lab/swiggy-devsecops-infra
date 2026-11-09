@@ -1,0 +1,28 @@
+# Cluster-wide tooling, currently the monitoring stack. Unlike the swiggy
+# project, this one may create cluster-scoped objects (CRDs, ClusterRoles),
+# because operators need them. It is limited to the official
+# prometheus-community chart repository plus this repository for settings,
+# and to the monitoring and kube-system namespaces.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Cluster platform tooling (monitoring)
+  sourceRepos:
+    - https://prometheus-community.github.io/helm-charts
+    - https://github.com/paighanutkarsh2410-lab/swiggy-devsecops-infra.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+    # The chart adds a Service for kubelet metrics in kube-system.
+    - server: https://kubernetes.default.svc
+      namespace: kube-system
+  clusterResourceWhitelist:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRole
+    - group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding

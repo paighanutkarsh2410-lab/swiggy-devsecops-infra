@@ -31,6 +31,20 @@ kubectl apply -f "$ROOT/bootstrap/namespace.yaml"
 kubectl -n swiggy create secret generic swiggy-secrets --from-env-file="$SECRETS" \
   --dry-run=client -o yaml | kubectl apply -f -
 
+# Grafana's admin login for the monitoring stack, also kept outside Git.
+GRAFANA="$ROOT/bootstrap/kind/grafana.env"
+if [ ! -f "$GRAFANA" ]; then
+  ( umask 077
+    {
+      echo "admin-user=admin"
+      echo "admin-password=$(openssl rand -hex 16)"
+    } > "$GRAFANA" )
+  echo "Generated $GRAFANA"
+fi
+kubectl apply -f "$ROOT/bootstrap/monitoring-namespace.yaml"
+kubectl -n monitoring create secret generic grafana-admin --from-env-file="$GRAFANA" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
 # 2. Argo CD, which then deploys and keeps syncing the app.
 "$ROOT/scripts/argocd-up.sh" "$REVISION"
 
@@ -52,3 +66,5 @@ kubectl -n swiggy get pods -o wide
 echo "Customer app:    http://localhost:8081"
 echo "Partner console: http://localhost:8083"
 echo "Argo CD UI:      kubectl -n argocd port-forward svc/argocd-server 8443:443, then https://localhost:8443"
+echo "Grafana:         kubectl -n monitoring port-forward svc/kps-grafana 3001:80, then http://localhost:3001"
+echo "                 (login in $GRAFANA; the stack may need a few more minutes to start)"

@@ -1,0 +1,114 @@
+{{- if .Values.monitoring.enabled }}
+# Prometheus scrapes the backend's /metrics every 30 seconds.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/name: backend
+    {{- include "swiggy.labels" . | nindent 4 }}
+  annotations:
+    # The CRD comes from the monitoring stack, which Argo CD may install
+    # after this app on a fresh cluster.
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+---
+# Only the monitoring namespace may reach the backend directly, on its API port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-backend-from-monitoring
+  labels:
+    {{- include "swiggy.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.monitoring.namespace }}
+      ports:
+        - port: 3000
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: swiggy-alerts
+  labels:
+    {{- include "swiggy.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  groups:
+    - name: swiggy.availability
+      rules:
+        - alert: SwiggyBackendDown
+          expr: sum(up{namespace="{{ .Release.Namespace }}", service="backend"}) == 0 or absent(up{namespace="{{ .Release.Namespace }}", service="backend"})
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: No backend replica is answering Prometheus
+            description: Every swiggy backend target has been down for over a minute, so both websites' API calls are failing.
+        - alert: SwiggyBackendReplicasMissing
+          expr: kube_deployment_status_replicas_available{namespace="{{ .Release.Namespace }}", deployment="backend"} < kube_deployment_spec_replicas{namespace="{{ .Release.Namespace }}", deployment="backend"}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Backend is running with fewer replicas than it should
+            description: "{{ "{{" }} $value {{ "}}" }} backend replicas available; the Deployment asks for more."
+        - alert: SwiggyPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="{{ .Release.Namespace }}"}[15m]) > 2
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ "{{" }} $labels.pod {{ "}}" }} keeps restarting"
+            description: "Container {{ "{{" }} $labels.container {{ "}}" }} restarted more than twice in 15 minutes."
+    - name: swiggy.api
+      rules:
+        - alert: SwiggyHighErrorRate
+          expr: |
+            sum(rate(swiggy_http_request_duration_seconds_count{namespace="{{ .Release.Namespace }}", status_code=~"5.."}[5m]))
+              / sum(rate(swiggy_http_request_duration_seconds_count{namespace="{{ .Release.Namespace }}"}[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: More than 5% of API requests are failing
+            description: "{{ "{{" }} $value | humanizePercentage {{ "}}" }} of API requests returned a 5xx error over the last 5 minutes."
+        - alert: SwiggySlowApi
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(swiggy_http_request_duration_seconds_bucket{namespace="{{ .Release.Namespace }}", route!="unmatched"}[5m]))
+            ) > 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: API is slow
+            description: "95% of API requests took up to {{ "{{" }} $value | humanizeDuration {{ "}}" }} over the last 5 minutes; the target is under 1 second."
+---
+# Grafana's sidecar loads any ConfigMap with this label as a dashboard.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swiggy-dashboard
+  labels:
+    grafana_dashboard: "1"
+    {{- include "swiggy.labels" . | nindent 4 }}
+data:
+  swiggy.json: |
+    {{- .Files.Get "files/dashboard.json" | nindent 4 }}
+{{- end }}
