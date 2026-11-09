@@ -2,19 +2,22 @@
 
 Infrastructure and deployment configuration for [swiggy-devsecops-app](https://github.com/paighanutkarsh2410-lab/swiggy-devsecops-app).
 
-Keeping deployment config apart from application code means the Git history of this repo is the history of what was deployed. This becomes the GitOps source of truth when Argo CD is added.
+This repository is the GitOps source of truth: what is on `main` here is what runs. Argo CD watches it and keeps the cluster in line, so the Git history of this repo is the history of every deployment, and rolling back is a `git revert`.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
-| `k8s/base` | Kubernetes manifests shared by every environment |
-| `k8s/overlays/kind` | Local cluster settings: image tags, NodePorts for both websites, secrets |
+| `charts/swiggy` | Helm chart for the whole app: customer app, partner console, API, PostgreSQL, network policies, ingress |
+| `charts/swiggy/values-kind.yaml` | Local kind settings: image tag, NodePorts |
+| `charts/swiggy/values-aws.yaml` | K3s on EC2 settings: image tag, Traefik host routing |
+| `argocd/` | Argo CD AppProject and Application for the kind cluster |
+| `bootstrap/namespace.yaml` | The `swiggy` namespace, created with the secrets before the app |
 | `kind/cluster.yaml` | Local kind cluster definition |
-| `k8s/overlays/aws` | K3s on EC2 settings: image tags, Traefik host routing, secrets |
-| `scripts/kind-up.sh` | Creates the cluster and deploys the app |
+| `scripts/kind-up.sh` | Creates the cluster, installs Argo CD and lets it deploy the app |
+| `scripts/argocd-up.sh` | Installs a pinned, checksum-verified Argo CD and registers the app |
 | `scripts/aws-up.sh`, `aws-down.sh`, `aws-status.sh` | Create, destroy and check the whole AWS environment |
-| `scripts/aws-deploy.sh` | Deploys the app to the K3s server on EC2 |
+| `scripts/aws-deploy.sh` | Renders the chart and deploys it to the K3s server on EC2 |
 | `docs/aws-deployment.md` | Record of a deployment to AWS, with screenshots |
 | `terraform/aws` | AWS network and EC2 server for K3s |
 | `ansible` | Server hardening and K3s installation |
@@ -25,6 +28,8 @@ Each tool has one job:
 |---|---|
 | Terraform | Creates the server and its network in AWS |
 | Ansible | Configures the server and installs K3s |
+| Helm | Describes the app once, with one values file per environment |
+| Argo CD | Deploys what is in Git and reverts drift |
 | Kubernetes | Runs and heals the application |
 
 ## Architecture
@@ -47,29 +52,80 @@ flowchart LR
 
 On AWS, Traefik routes by host name. [sslip.io](https://sslip.io) resolves names like `partner.13-55-152-184.sslip.io` to the IP inside them, so host-based routing works without buying a domain.
 
+## Delivery pipeline
+
+```mermaid
+flowchart LR
+    Merge[Merge to app main] --> CI[App CI: tests, scans,<br/>3 images to GHCR]
+    CI --> PR[PR here bumping<br/>image.tag]
+    PR --> Checks[Infra CI: helm lint,<br/>kubeconform, Trivy]
+    Checks --> Main[Merge to infra main]
+    Main --> Argo[Argo CD syncs kind]
+    Main --> AWS[aws-deploy.sh<br/>for AWS]
+```
+
+1. A merge to `main` in the app repo runs its tests and Trivy scans, then publishes the three images tagged with the commit SHA.
+2. The app repo's CI opens a pull request here that changes `image.tag` in both values files. This needs the `INFRA_REPO_TOKEN` secret described in the app repo's README.
+3. This repo's CI lints and renders the chart for both environments and validates it.
+4. Merging the pull request is the deployment. Argo CD notices the new commit on `main` within 3 minutes and rolls it out to kind; AWS gets it on the next `aws-deploy.sh`.
+
+To roll back, revert the commit on `main`. Argo CD returns the cluster to the previous version.
+
+### What Argo CD enforces
+
+- **Automated sync with prune:** objects added to or removed from the chart are added to or removed from the cluster.
+- **Self-heal:** manual changes are reverted. A `kubectl scale`, a deleted network policy or a swapped image is undone within seconds.
+- **A restricted project** (`argocd/project.yaml`): the app may only come from this repository, may only deploy into the `swiggy` namespace, and may not create cluster-wide objects, Roles, RoleBindings or ServiceAccounts.
+
+The namespace and the `swiggy-secrets` Secret are created by the bootstrap scripts and are not in Git. A tool such as Sealed Secrets or External Secrets would be the next step for managing secrets through Git as well.
+
 ## Security
 
 - The `swiggy` namespace enforces the `restricted` Pod Security Standard.
 - Every container runs as non-root with a read-only root filesystem, no privilege escalation, all Linux capabilities dropped and the `RuntimeDefault` seccomp profile.
 - Network policies deny all incoming traffic by default. Only the two websites accept outside traffic, only they can reach the backend, and only the backend can reach PostgreSQL.
 - Service account tokens are not mounted, because no pod talks to the Kubernetes API.
-- Secrets are generated locally into `secrets.env`, which is never committed.
+- Secrets are generated locally into `bootstrap/<environment>/secrets.env`, which is never committed.
+- Argo CD is installed from the commit of its signed `v3.5.7` release tag, and the manifest's SHA-256 is checked before it is applied.
+- The chart only accepts a quoted, full 40-character commit SHA as the image tag, so a mutable tag like `latest` cannot be deployed by mistake.
 - The EC2 server requires IMDSv2, encrypts its disk, and only accepts SSH and Kubernetes API traffic from one admin address.
 - Ansible disables root and password SSH logins, and turns on automatic security updates.
 - K3s is installed from a pinned release with its checksum verified, and encrypts Kubernetes Secrets at rest.
-- CI validates the Kubernetes manifests with kubeconform, checks Terraform formatting and validity, lints Ansible at the `production` profile, and fails on any HIGH or CRITICAL Trivy misconfiguration.
+- CI lints and renders the Helm chart, validates the output and the Argo CD objects with kubeconform, checks Terraform formatting and validity, lints Ansible at the `production` profile, and fails on any HIGH or CRITICAL Trivy misconfiguration.
 
 ## Run locally
 
-You need Docker, [kind](https://kind.sigs.k8s.io) and kubectl.
+You need Docker, [kind](https://kind.sigs.k8s.io), kubectl and Helm.
 
 ```bash
 ./scripts/kind-up.sh
 ```
 
-The script creates a `swiggy` cluster, generates random secrets on first run, deploys everything and waits for it to be ready. The customer app is then at http://localhost:8081 and the partner console at http://localhost:8083.
+The script creates a `swiggy` cluster, generates random secrets on first run, installs Argo CD and waits until Argo CD has deployed the app from `main` and it is healthy. This takes about 4 minutes on a fresh cluster. The customer app is then at http://localhost:8081 and the partner console at http://localhost:8083.
 
-A cluster created before the partner console existed has no port mapping for it. Recreate it with `kind delete cluster --name swiggy` and run the script again.
+To try a branch before merging, pass it: `./scripts/kind-up.sh my-branch`. Argo CD then follows that branch instead of `main`.
+
+### Argo CD
+
+Open the Argo CD UI:
+
+```bash
+kubectl -n argocd port-forward svc/argocd-server 8443:443
+```
+
+Then browse to https://localhost:8443 and sign in as `admin`. The initial password is in a Secret; print it in your own terminal:
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
+```
+
+Check the app from the command line:
+
+```bash
+kubectl -n argocd get application swiggy
+```
+
+### Partner accounts
 
 To create a restaurant partner account (add `STAFF_ROLE=OWNER` for an owner):
 
@@ -159,14 +215,14 @@ cd ../../ansible
 ansible-playbook playbooks/site.yml
 ```
 
-Deploy the app. The script renders `k8s/overlays/aws` locally and applies it over SSH, so it needs `kubectl` on your machine but not access to port 6443:
+Deploy the app. The script renders the Helm chart with `values-aws.yaml` locally and applies it over SSH, so it needs `kubectl` and `helm` on your machine but not access to port 6443:
 
 ```bash
 cd ..
 ./scripts/aws-deploy.sh
 ```
 
-K3s's built-in Traefik serves the website on port 80 of the server. The script generates `k8s/overlays/aws/secrets.env` on first run. Keep it while the server exists: a new file would change the database password and lock the backend out of the existing database. `aws-down.sh` deletes it, because the database goes with the server.
+K3s's built-in Traefik serves the website on port 80 of the server. The script generates `bootstrap/aws/secrets.env` on first run. Keep it while the server exists: a new file would change the database password and lock the backend out of the existing database. `aws-down.sh` deletes it, because the database goes with the server.
 
 Remove everything when you are done:
 
@@ -179,11 +235,11 @@ Terraform state is stored locally and is never committed. It describes your AWS 
 
 ## Deploying a new version
 
-Images are built and scanned by the app repo's CI and published to GHCR, tagged with the commit SHA. To deploy a new version, update `newTag` in `k8s/overlays/kind/kustomization.yaml` or `k8s/overlays/aws/kustomization.yaml` and apply the overlay again.
+Normally the app repo's CI opens the pull request for you (see [Delivery pipeline](#delivery-pipeline)). To deploy a version by hand, set `image.tag` in both `charts/swiggy/values-kind.yaml` and `charts/swiggy/values-aws.yaml` to the app commit SHA, in quotes, and merge the change. CI checks that both files use the same tag.
 
 ## Database schema
 
-`k8s/base/db/init.sql` is a copy of `backend/db/init.sql` from the app repo. It only runs when the database volume is first created.
+`charts/swiggy/files/init.sql` is a copy of `backend/db/init.sql` from the app repo. It only runs when the database volume is first created.
 
 An existing database does not rerun `init.sql`. To upgrade one in place, run the app repo's migrations in order. Each is safe to run more than once:
 
