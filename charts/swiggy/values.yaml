@@ -6,6 +6,12 @@ image:
   # Commit SHA of swiggy-devsecops-app. All three images are built from the
   # same commit, so one tag covers them. CI proposes new tags as pull requests.
   tag: ""
+  # sha256 digest of each image built from that commit, keyed by image name.
+  # With a digest, Kubernetes runs exactly those bytes even if the tag is
+  # later pushed again; the tag stays in the reference for readability.
+  digests: {}
+  # When true, every image must have a digest.
+  requireDigest: false
   pullPolicy: IfNotPresent
 
 # Created outside Git by scripts/kind-up.sh or scripts/aws-deploy.sh, with

@@ -1,8 +1,12 @@
 # K3s on EC2. scripts/aws-deploy.sh renders the chart with this file and
 # sets ingress.partnerHost from the server IP.
 image:
-  # Updated by pull requests from swiggy-devsecops-app's CI.
+  # Tag and digests are updated by pull requests from swiggy-devsecops-app's CI.
   tag: "3d4de91d4b6a01cc7faf89c9c7afcfc3092e0b3d"
+  digests:
+    swiggy-devsecops-backend: "sha256:5b06037a0a437ee4ee03a7a70a4c770e91823e2e216c8d08d5bbfb1fa718113b"
+    swiggy-devsecops-frontend: "sha256:afe38918475c01d3e291942a8d3d66c3bc2e7e20b6892cd8c63e78d2e586fefb"
+    swiggy-devsecops-partner: "sha256:dbfc2c7f435d00501712ce2fb07e884fa18a7595c78e301020a949bd96c283a9"
 
 ingress:
   enabled: true
