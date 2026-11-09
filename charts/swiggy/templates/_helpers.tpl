@@ -14,7 +14,14 @@ helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
 {{- if not (regexMatch "^[0-9a-f]{40}$" $tag) -}}
 {{- fail (printf "image.tag must be a full 40-character commit SHA, got %q" $tag) -}}
 {{- end -}}
-{{ .root.Values.image.registry }}/{{ .name }}:{{ $tag }}
+{{- $digest := index (.root.Values.image.digests | default dict) .name | default "" -}}
+{{- if and .root.Values.image.requireDigest (not $digest) -}}
+{{- fail (printf "image.digests.%s must be set: images are deployed by the digest CI signed" .name) -}}
+{{- end -}}
+{{- if and $digest (not (regexMatch "^sha256:[0-9a-f]{64}$" $digest)) -}}
+{{- fail (printf "image.digests.%s must look like sha256:<64 hex characters>, got %q" .name $digest) -}}
+{{- end -}}
+{{ .root.Values.image.registry }}/{{ .name }}:{{ $tag }}{{ if $digest }}@{{ $digest }}{{ end }}
 {{- end }}
 
 {{/* Pod security settings that satisfy the restricted Pod Security Standard. */}}

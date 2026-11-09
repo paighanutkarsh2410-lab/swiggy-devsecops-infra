@@ -44,13 +44,13 @@ jobs:
             -f charts/swiggy/values-aws.yaml \
             --set ingress.partnerHost=partner.192-0-2-10.sslip.io > rendered-aws.yaml
 
-      - name: Check both environments deploy the same image tag
+      - name: Check both environments deploy the same images
         run: |
-          kind_tag=$(grep -m1 -oE 'swiggy-devsecops-backend:[0-9a-f]{40}' rendered-kind.yaml)
-          aws_tag=$(grep -m1 -oE 'swiggy-devsecops-backend:[0-9a-f]{40}' rendered-aws.yaml)
-          echo "kind: $kind_tag"
-          echo "aws:  $aws_tag"
-          [ -n "$kind_tag" ] && [ "$kind_tag" = "$aws_tag" ]
+          images() { grep -oE 'swiggy-devsecops-[a-z]+:[0-9a-f]{40}(@sha256:[0-9a-f]{64})?' "$1" | sort -u; }
+          echo "kind:"; images rendered-kind.yaml
+          echo "aws:";  images rendered-aws.yaml
+          [ "$(images rendered-kind.yaml | wc -l)" -eq 3 ]
+          [ "$(images rendered-kind.yaml)" = "$(images rendered-aws.yaml)" ]
 
       # Same chart version and settings as argocd/monitoring.yaml.
       - name: Render the monitoring stack
