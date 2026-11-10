@@ -1,8 +1,24 @@
 # Swiggy DevSecOps Infra
 
+[![Validate Infrastructure](https://github.com/paighanutkarsh2410-lab/swiggy-devsecops-infra/actions/workflows/validate.yml/badge.svg?branch=main)](https://github.com/paighanutkarsh2410-lab/swiggy-devsecops-infra/actions/workflows/validate.yml)
+![Argo CD](https://img.shields.io/badge/GitOps-Argo%20CD-ef7b4d)
+![Helm](https://img.shields.io/badge/Helm-chart-0f1689)
+![Terraform](https://img.shields.io/badge/Terraform-AWS-7b42bc)
+![Only signed images](https://img.shields.io/badge/deploys-only%20signed%20images-2e7d32)
+
 Infrastructure and deployment configuration for [swiggy-devsecops-app](https://github.com/paighanutkarsh2410-lab/swiggy-devsecops-app).
 
 This repository is the GitOps source of truth: what is on `main` here is what runs. Argo CD watches it and keeps the cluster in line, so the Git history of this repo is the history of every deployment, and rolling back is a `git revert`.
+
+**Contents:** [See it running](#see-it-running) · [Layout](#layout) · [Architecture](#architecture) · [Delivery pipeline](#delivery-pipeline) · [Security](#security) · [Run locally](#run-locally) · [Monitoring](#monitoring) · [Deploy to AWS](#deploy-to-aws)
+
+## See it running
+
+| Argo CD keeps the cluster in sync with `main` | Grafana dashboard built on the app's own metrics |
+|---|---|
+| ![Argo CD application tree: Synced and Healthy](docs/images/argocd-app.png) | ![Grafana dashboard with live traffic](docs/images/grafana-dashboard.png) |
+
+The same app also runs on AWS: K3s on EC2, created by Terraform and configured by Ansible. [docs/aws-deployment.md](docs/aws-deployment.md) records a full deployment with screenshots, and the [app repo](https://github.com/paighanutkarsh2410-lab/swiggy-devsecops-app#screenshots) shows both websites.
 
 ## Layout
 
@@ -181,7 +197,7 @@ While monitoring is on, the app's chart adds (on kind only):
 
 - A Grafana dashboard, **Swiggy DevSecOps - Overview**: replicas up, request rate, 5xx rate, p95 response time, live partner consoles, requests by route, latency percentiles, responses by status code, order status changes, backend memory and restarts.
 
-  ![Grafana dashboard with live traffic on kind](docs/images/grafana-overview.jpg)
+  ![Grafana dashboard with live traffic on kind](docs/images/grafana-dashboard.png)
 
 CI renders the monitoring stack and validates it, checks the alert rules with `promtool check rules`, and runs `promtool test rules` on `monitoring/tests/swiggy-alerts-test.yaml`, which feeds the rules sample data and checks each alert fires, or stays quiet, when it should.
 
@@ -307,7 +323,7 @@ Terraform state is stored locally and is never committed. It describes your AWS 
 
 ## Deploying a new version
 
-Normally the app repo's CI opens the pull request for you (see [Delivery pipeline](#delivery-pipeline)). To deploy a version by hand, set `image.tag` in both `charts/swiggy/values-kind.yaml` and `charts/swiggy/values-aws.yaml` to the app commit SHA, in quotes, and merge the change. CI checks that both files use the same tag.
+Normally the app repo's CI opens the pull request for you (see [Delivery pipeline](#delivery-pipeline)). To deploy a version by hand, set `image.tag` to the app commit SHA, in quotes, and each entry under `image.digests` to that image's sha256 digest, in both `charts/swiggy/values-kind.yaml` and `charts/swiggy/values-aws.yaml`, then merge the change. CI checks that both files deploy the same images and that each one was signed by the app repo's CI, so only images built from the app's `main` branch can be deployed.
 
 ## Database schema
 
