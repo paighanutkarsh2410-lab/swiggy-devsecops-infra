@@ -2,11 +2,11 @@
 # sets ingress.partnerHost from the server IP.
 image:
   # Tag and digests are updated by pull requests from swiggy-devsecops-app's CI.
-  tag: "1e5833103ba8d333ad520ae2c6e1262672f9cef3"
+  tag: "85063bbf2291d6d8f58b0715a58fa3a6aa3c18f7"
   digests:
-    swiggy-devsecops-backend: "sha256:cd33e3dd4b285b082638c475b89bbadab955e24baa062889aabb0f0c19f902a8"
-    swiggy-devsecops-frontend: "sha256:a2f2db1c331ff659a8dcf26341290770f0f4e472abdfcbcaa2fd8c38e07300cf"
-    swiggy-devsecops-partner: "sha256:0dab950a35a2497a14f0de5894aaf07e480afb2a85be287899045028f1b64537"
+    swiggy-devsecops-backend: "sha256:a54cee344a83a8c48e52b2bcdee0ac3d70e4f0f0f0c349d1b681a2e9f7b81e65"
+    swiggy-devsecops-frontend: "sha256:990c22c7b7c7cb4679fec340ea6e2dd0fee9aacba3575e5894851df071cdcb26"
+    swiggy-devsecops-partner: "sha256:533f674e2bedfc3cc0947404f6eae34fc01c3c850b5f4db43de04f544b161eee"
 
 ingress:
   enabled: true
